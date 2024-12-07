@@ -15,6 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final DatabaseReference _database = FirebaseDatabase.instance.ref('tasks');
   List<Map<String, dynamic>> _tasks = [];
   final _taskController = TextEditingController();
+  String? _editingTaskId;
 
   @override
   void initState() {
@@ -41,17 +42,57 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _addTask() {
-    if (_taskController.text.trim().isNotEmpty) {
-      _database
-          .push()
-          .set({'title': _taskController.text.trim(), 'isDone': false});
+  void _addOrUpdateTask() {
+    final taskText = _taskController.text.trim();
+    if (taskText.isNotEmpty) {
+      if (_editingTaskId == null) {
+        // Menambah task baru
+        _database.push().set({'title': taskText, 'isDone': false});
+      } else {
+        // Mengupdate task yang sudah ada
+        _database.child(_editingTaskId!).update({'title': taskText});
+        _editingTaskId = null;
+      }
       _taskController.clear();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Task tidak boleh kosong')),
       );
     }
+  }
+
+  void _deleteTask(String taskId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Hapus Task'),
+          content: const Text('Apakah Anda yakin ingin menghapus task ini?'),
+          actions: [
+            TextButton(
+              child: const Text('Batal'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Hapus'),
+              onPressed: () {
+                _database.child(taskId).remove();
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _editTask(Map<String, dynamic> task) {
+    setState(() {
+      _editingTaskId = task['id'];
+      _taskController.text = task['title'];
+    });
   }
 
   @override
@@ -79,14 +120,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: TextField(
                     controller: _taskController,
-                    decoration: const InputDecoration(
-                      hintText: 'Tambah Tugas Baru',
+                    decoration: InputDecoration(
+                      hintText: _editingTaskId == null
+                          ? 'Tambah Tugas Baru'
+                          : 'Edit Tugas',
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _addTask,
+                  icon: Icon(_editingTaskId == null ? Icons.add : Icons.save),
+                  onPressed: _addOrUpdateTask,
                 )
               ],
             ),
@@ -95,15 +138,60 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView.builder(
               itemCount: _tasks.length,
               itemBuilder: (context, index) {
+                final task = _tasks[index];
                 return ListTile(
-                  title: Text(_tasks[index]['title']),
-                  trailing: Checkbox(
-                    value: _tasks[index]['isDone'] ?? false,
-                    onChanged: (bool? value) {
-                      _database
-                          .child(_tasks[index]['id'])
-                          .update({'isDone': value ?? false});
-                    },
+                  title: Text(
+                    task['title'],
+                    style: task['isDone']
+                        ? TextStyle(decoration: TextDecoration.lineThrough)
+                        : null,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        value: task['isDone'] ?? false,
+                        onChanged: (bool? value) {
+                          _database
+                              .child(task['id'])
+                              .update({'isDone': value ?? false});
+                        },
+                      ),
+                      PopupMenuButton<String>(
+                        onSelected: (String choice) {
+                          if (choice == 'edit') {
+                            _editTask(task);
+                          } else if (choice == 'delete') {
+                            _deleteTask(task['id']);
+                          }
+                        },
+                        itemBuilder: (BuildContext context) {
+                          return [
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, color: Colors.blue),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Delete'),
+                                ],
+                              ),
+                            ),
+                          ];
+                        },
+                        icon: const Icon(Icons.more_vert),
+                      ),
+                    ],
                   ),
                 );
               },
@@ -112,5 +200,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _taskController.dispose();
+    super.dispose();
   }
 }
