@@ -46,10 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final taskText = _taskController.text.trim();
     if (taskText.isNotEmpty) {
       if (_editingTaskId == null) {
-        // Menambah task baru
         _database.push().set({'title': taskText, 'isDone': false});
       } else {
-        // Mengupdate task yang sudah ada
         _database.child(_editingTaskId!).update({'title': taskText});
         _editingTaskId = null;
       }
@@ -100,15 +98,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Todo List'),
+        centerTitle: true,
+        backgroundColor: Colors.blue[800],
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
               Provider.of<CustomAuthProvider>(context, listen: false).logout();
-              Navigator.pushReplacement(
-                  context, MaterialPageRoute(builder: (_) => LoginScreen()));
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()));
             },
-          )
+          ),
         ],
       ),
       body: Column(
@@ -121,81 +121,109 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _taskController,
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.blue[50],
                       hintText: _editingTaskId == null
-                          ? 'Tambah Tugas Baru'
+                          ? 'Tambah Tugas Baru...'
                           : 'Edit Tugas',
+                      prefixIcon: const Icon(Icons.task,
+                          color: Color.fromARGB(255, 52, 53, 53)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(_editingTaskId == null ? Icons.add : Icons.save),
+                const SizedBox(width: 8),
+                ElevatedButton(
                   onPressed: _addOrUpdateTask,
-                )
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[800],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    _editingTaskId == null ? 'Tambah' : 'Simpan',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
               ],
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _tasks.length,
-              itemBuilder: (context, index) {
-                final task = _tasks[index];
-                return ListTile(
-                  title: Text(
-                    task['title'],
-                    style: task['isDone']
-                        ? TextStyle(decoration: TextDecoration.lineThrough)
-                        : null,
+            child: _tasks.isEmpty
+                ? Center(
+                    child: Text(
+                      'Belum ada tugas',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _tasks.length,
+                    itemBuilder: (context, index) {
+                      final task = _tasks[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        elevation: 3,
+                        child: ListTile(
+                          leading: Checkbox(
+                            value: task['isDone'] ?? false,
+                            onChanged: (bool? value) {
+                              _database
+                                  .child(task['id'])
+                                  .update({'isDone': value ?? false});
+                            },
+                          ),
+                          title: Text(
+                            task['title'],
+                            style: task['isDone']
+                                ? const TextStyle(
+                                    decoration: TextDecoration.lineThrough,
+                                    color: Colors.grey,
+                                  )
+                                : const TextStyle(color: Colors.black),
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (String choice) {
+                              if (choice == 'edit') {
+                                _editTask(task);
+                              } else if (choice == 'delete') {
+                                _deleteTask(task['id']);
+                              }
+                            },
+                            itemBuilder: (BuildContext context) {
+                              return [
+                                const PopupMenuItem<String>(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, color: Colors.blue),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem<String>(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Text('Delete'),
+                                    ],
+                                  ),
+                                ),
+                              ];
+                            },
+                            icon: const Icon(Icons.more_vert),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: task['isDone'] ?? false,
-                        onChanged: (bool? value) {
-                          _database
-                              .child(task['id'])
-                              .update({'isDone': value ?? false});
-                        },
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (String choice) {
-                          if (choice == 'edit') {
-                            _editTask(task);
-                          } else if (choice == 'delete') {
-                            _deleteTask(task['id']);
-                          }
-                        },
-                        itemBuilder: (BuildContext context) {
-                          return [
-                            const PopupMenuItem<String>(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, color: Colors.blue),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Delete'),
-                                ],
-                              ),
-                            ),
-                          ];
-                        },
-                        icon: const Icon(Icons.more_vert),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
           ),
         ],
       ),
